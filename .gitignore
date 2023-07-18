@@ -2,3 +2,7 @@
 .vscode
 *.exe
 bwtsearch
+*.py
+*.txt
+*.rlb
+*.bwt

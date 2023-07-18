@@ -1,3 +1,4 @@
+#include "bwtsearch.h"
 #include <cstdint>
 #include <vector>
 #include <algorithm>
@@ -5,16 +6,42 @@
 
 namespace bwtsearch
 {
-    uint8_t occurance(std::vector<std::pair<uint8_t, char>> const& B_S_array, char const& target,uint8_t const& row) {
-
-        return 1;
+    unsigned int rank(IntCharArray const& pair_array, unsigned int position) {
+        unsigned int num_rows = 0;
+        for (unsigned int i = 0; i < pair_array.size(); i++) {
+            num_rows += pair_array[i].first;
+            if (position <= num_rows) {
+                return i + 1; // Returning 1-based index 
+            }
+        }
+        return 0;
     }
 
-    std::vector<std::pair<char, uint8_t>>::iterator findCtable(std::vector<std::pair<char, uint8_t>>& C_table, std::reverse_iterator<std::string::const_iterator>& str_it) {
-        auto res = std::find_if(C_table.begin(), C_table.end(), [str_it](std::pair<char, uint8_t> e){
-            return e.first == *str_it;
-        });
-        return res;
+    unsigned int select(IntCharArray const& pair_array, unsigned int N) {
+        unsigned int num_rows = 0;
+        for (unsigned int i = 0; i < N - 1; i++) {
+            num_rows += pair_array[i].first;
+        }
+        num_rows++;
+        return num_rows;
     }
 
+    unsigned int occurance(IntCharArray const& pair_array, unsigned int position, char target) {
+        unsigned int num_row = 0;
+        unsigned int count = 0;
+        for (auto& row : pair_array) {
+            if (row.second == target) {
+                count += row.first;
+            }
+            num_row += row.first;
+            if (num_row >= position) {
+                if (row.second == target) {
+                    auto tmp = num_row - position;
+                    count -= tmp;
+                }
+                return count;
+            }
+        }
+        return 0;
+    }
 }

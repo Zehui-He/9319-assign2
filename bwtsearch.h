@@ -6,9 +6,14 @@
 
 namespace bwtsearch
 {
-    // Find the occurance of character c up to a given position in a B_S_array 
-    uint8_t occurance(std::vector<std::pair<uint8_t, char>> const& B_S_array, char const& c,uint8_t const& position);
-    
-    // Return the element in C table 
-    std::vector<std::pair<char, uint8_t>>::iterator findCtable(std::vector<std::pair<char, uint8_t>>& C_table, std::reverse_iterator<std::string::const_iterator>& str_it);
+    using IntCharArray = std::vector<std::pair<unsigned int, char>>;
+
+    // Return the number of new characters up to a given position. Returns 1-based index. 
+    unsigned int rank(IntCharArray const&, unsigned int);
+
+    // Return the position of when N new characters are found. 
+    unsigned int select(IntCharArray const& , unsigned int);
+
+    // Find the occurance of a character up to a given position. 
+    unsigned int occurance(IntCharArray const&, unsigned int, char);
 }
