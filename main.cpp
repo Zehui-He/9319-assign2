@@ -7,20 +7,21 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <unordered_set>
 
 constexpr const std::uint8_t MAX_CHAR = 0b10000000;
 
 
 int main() {
     //
-    const std::string pattern("industry");
+    const std::string pattern("a");
 
     // Open the file 
-    const std::string file_name("dummy.rlb");
+    const std::string file_name("small2.rlb");
     std::ifstream file(file_name, std::ios::binary);
 
-    std::uint8_t c; // Buffer to read single byte
-    std::uint8_t prev; // Buffer to store previous byte 
+    std::uint8_t c = 0; // Buffer to read single byte
+    std::uint8_t prev = 0; // Buffer to store previous byte 
     unsigned int count = 0; // Buffer to store count 
     unsigned int word_count = 0; // The total number of character read 
 
@@ -81,11 +82,11 @@ int main() {
     //     std::cout << i.first << "  " << static_cast<int>(i.second) << std::endl;
     // }
 
-    for (auto& i :B_S_array) {
-        for (unsigned int j = 0; j < i.first; j++) {
-            std::cout << i.second << std::endl;
-        }
-    }
+    // for (auto& i :B_S_array) {
+    //     for (unsigned int j = 0; j < i.first; j++) {
+    //         std::cout << i.second << std::endl;
+    //     }
+    // }
 
     auto pattern_it = pattern.rbegin();
 
@@ -93,13 +94,17 @@ int main() {
     // Find the statring and ending point of the character in C table 
     // IMPORTANT NOTE: The first and last calculated here are 1-based index 
     auto tmp = C_table.find(*pattern_it);
+    if (tmp == C_table.end()) {
+        std::cout << "Not found" << std::endl;
+        return 0;
+    }
     unsigned int first_idx = tmp->second;
 
     unsigned int first = 0;
     first = first_idx + 1;
 
     tmp++;
-    unsigned int last;
+    unsigned int last = 0;
     if (tmp == C_table.end()) {
         last = word_count;
     } else {
@@ -110,21 +115,31 @@ int main() {
 
     pattern_it++;
 
-    std::cout << static_cast<int>(first) << std::endl;
-    std::cout << static_cast<int>(last) << std::endl;
+    // std::cout << static_cast<int>(first) << std::endl;
+    // std::cout << static_cast<int>(last) << std::endl;
 
     while (pattern_it != pattern.rend()) {
         // C[current character]
         auto starting_idx = C_table[*pattern_it];
+        // Why following linse are added? 
+        // if (tmp == C_table.end()) {
+        //     std::cout << "Not found" << std::endl;
+        //     return 0;
+        // }
 
-        std::cout << bwtsearch::occurance(B_S_array, first - 1, *pattern_it) << std::endl;
-        std::cout << bwtsearch::occurance(B_S_array, last, *pattern_it) << std::endl;
+        // std::cout << bwtsearch::occurance(B_S_array, first - 1, *pattern_it) << std::endl;
+        // std::cout << bwtsearch::occurance(B_S_array, last, *pattern_it) << std::endl;
 
         // Calculate the occurance of current letter upto the PREVIOUS row of FIRST 
         auto occ_first = bwtsearch::occurance(B_S_array, first - 1, *pattern_it);
 
         // Calculate the occurance of current letter upto LAST 
         auto occ_last = bwtsearch::occurance(B_S_array, last, *pattern_it);
+
+        if (occ_first == 0 && occ_last == 0) {
+            std::cout << "Not found" << std::endl;
+            return 0;
+        }
 
         // Update first 
         first = starting_idx + occ_first;
@@ -143,12 +158,99 @@ int main() {
         first++;
         last++;
 
-        std::cout << static_cast<int>(first) << std::endl;
-        std::cout << static_cast<int>(last) << std::endl;
+        // std::cout << static_cast<int>(first) << std::endl;
+        // std::cout << static_cast<int>(last) << std::endl;
 
         if (first > last) {
             std::cout << "Not found" << std::endl;
-            break;
+            return 0;
+        }
+    }
+
+    // Construct the entry mapping 
+    // First is the entry, second is the associated index of '['
+    std::map<unsigned int, unsigned int> entry_mapping{};
+    std::unordered_set<unsigned int> entry_index{}; // Store all the index invoved with the entries
+    {
+        auto idx = C_table[']'] + 1; // 1-base adjustment 
+        while (bwtsearch::at(B_prime_F_array, idx) == ']') {
+            auto current_idx = idx;
+            char decode = 0;
+            std::string entry_num{};
+            entry_index.insert(idx);
+            while (decode != '[') {
+                decode = bwtsearch::at(B_S_array, current_idx);
+                entry_num += decode;
+                auto starting_idx = C_table[decode];
+                auto occ = bwtsearch::occurance(B_S_array, current_idx, decode);
+                current_idx = starting_idx + occ;
+                entry_index.insert(current_idx);
+            }
+            entry_num.pop_back(); // Remove the tailing '['
+            std::reverse(entry_num.begin(), entry_num.end());
+            entry_mapping.insert({std::stoul(entry_num), idx});
+            // std::cout << entry_num << std::endl;
+            idx++;
+        }
+    }
+
+    // Decode from first to last 
+    std::unordered_set<unsigned int> seen_idx{}; // Store the seen index 
+    std::vector<unsigned int> final_idx{}; // Store the result index 
+    {
+        for (unsigned int idx = first; idx <= last; idx++) {
+            auto current_idx = idx;
+            char decode = 0;
+            std::string msg;
+            while (decode != '[') {
+                // Mark the index as seen if it is not associated with entry 
+                if (entry_index.find(current_idx) == entry_index.end()) {
+                    // No need to continue for seen index 
+                    if (!seen_idx.insert(current_idx).second) {
+                        break;
+                    }
+                }
+                decode = bwtsearch::at(B_S_array, current_idx);
+                msg += decode;
+                auto starting_idx = C_table[decode];
+                auto occ = bwtsearch::occurance(B_S_array, current_idx, decode);
+                current_idx = starting_idx + occ;
+            }
+            if (msg.back() != '[') {
+                continue;
+            }
+            std::reverse(msg.begin(), msg.end());
+            std::cout << msg;
+
+            // Continue to decode from the back 
+            auto num_str = std::string(msg.begin() += 1, std::find(msg.begin() += 1, msg.end(), ']'));
+            auto entry_ptr = entry_mapping.find(std::stoul(num_str) + 1);
+            if (entry_ptr == entry_mapping.end()) {
+                current_idx = entry_mapping.begin()->second;
+            } else {
+                current_idx = entry_ptr->second;
+            }
+            decode = 0;
+            auto msg_cont = std::string();
+            while (seen_idx.find(current_idx) == seen_idx.end()) {
+                if (entry_index.find(current_idx) == entry_index.end()) {
+                    seen_idx.insert(current_idx);
+                }
+                decode = bwtsearch::at(B_S_array, current_idx);
+                msg_cont += decode;
+                auto starting_idx = C_table[decode];
+                auto occ = bwtsearch::occurance(B_S_array, current_idx, decode);
+                current_idx = starting_idx + occ;
+            }
+
+            // Remove tailing index 
+            std::reverse(msg_cont.begin(), msg_cont.end());
+            while (msg_cont.back() != '[') {
+                msg_cont.pop_back();
+            }
+            msg_cont.pop_back();
+            
+            std::cout << msg_cont << std::endl;
         }
     }
 

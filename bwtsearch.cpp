@@ -44,4 +44,15 @@ namespace bwtsearch
         }
         return 0;
     }
+
+    char at(IntCharArray const& pair_array, unsigned int position) {
+        unsigned int num_row = 0;
+        for (auto& row : pair_array) {
+            num_row += row.first;
+            if (num_row >= position) {
+                return row.second;
+            }
+        }
+        return 0;
+    }
 }

@@ -16,4 +16,7 @@ namespace bwtsearch
 
     // Find the occurance of a character up to a given position. 
     unsigned int occurance(IntCharArray const&, unsigned int, char);
+
+    // Find the character at given position. 
+    char at(IntCharArray const&, unsigned int);
 }
