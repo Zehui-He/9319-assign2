@@ -4,6 +4,6 @@
 
 namespace utility
 {
-    void unsetMsb(uint8_t&);
-    bool paircmp(std::pair<uint8_t, char> const&, std::pair<uint8_t, char> const&);
+    void unsetMsb(unsigned int&);
+    bool paircmp(std::pair<unsigned int, char> const&, std::pair<unsigned int, char> const&);
 }
