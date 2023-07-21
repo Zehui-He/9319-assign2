@@ -27,30 +27,19 @@ namespace bwtsearch
         return num_rows;
     }
 
-    unsigned int occurance(IntCharArray const& pair_array, unsigned int position, char target) {
-        unsigned int num_row = 0;
-        unsigned int count = 0;
-        for (auto& row : pair_array) {
-            if (row.second == target) {
-                count += row.first;
-            }
-            num_row += row.first;
-            if (num_row >= position) {
-                if (row.second == target) {
-                    auto tmp = num_row - position;
-                    count -= tmp;
-                }
-                return count;
-            }
-        }
-        return 0;
-    }
-
-    
-    unsigned int findLessThanOrEqual(const std::vector<unsigned int>& sortedArray, unsigned int target) {
+    unsigned int findLessThanOrEqual(std::vector<unsigned int> const& sortedArray, unsigned int const& target) {
         int left = 0;
         int right = sortedArray.size() - 1;
         unsigned int resultIndex = sortedArray.size(); // Initialize result index to size of the array
+
+        // edge cases
+        if(sortedArray[0] > target) {
+            return 0;
+        }
+
+        if (sortedArray.back() < target) {
+            return sortedArray.size();
+        }
 
         while (left <= right) {
             int mid = left + (right - left) / 2;
@@ -64,10 +53,10 @@ namespace bwtsearch
             }
         }
 
-        return resultIndex;
+        return resultIndex + 1;
     }
 
-    unsigned int occurance2(IntCharArray const& pair_array, unsigned int position, char target, std::map<char, std::vector<unsigned int>> const& magic_map) {
+    unsigned int occurance(unsigned int position, char target, std::map<char, std::vector<unsigned int>> const& magic_map) {
         auto temp = magic_map.find(target)->second;
         // auto count = 0;
         // if (position < temp[0]) {
@@ -85,7 +74,7 @@ namespace bwtsearch
         //     break;
         // }
         // return count;
-        return findLessThanOrEqual(temp, position) + 1;
+        return findLessThanOrEqual(temp, position);
     }
 
     char at(IntCharArray const& pair_array, unsigned int position) {
@@ -99,12 +88,12 @@ namespace bwtsearch
         return 0;
     }
 
-    std::pair<BwtIndex, BwtIndex> search(IntCharArray const& B_S_array, std::map<char, std::vector<unsigned int>> const& magic_map, std::map<char, BwtIndex>& C_table, std::string const& pattern, unsigned int const& word_count) {
-    auto pattern_it = pattern.rbegin();
-    // Calculate the first and last for the first character 
-    // Find the statring and ending point of the character in C table 
-    // IMPORTANT NOTE: The first and last calculated here are 1-based index 
-    auto tmp = C_table.find(*pattern_it);
+    std::pair<BwtIndex, BwtIndex> search(std::map<char, std::vector<unsigned int>> const& magic_map, std::map<char, BwtIndex>& C_table, std::string const& pattern, unsigned int const& word_count) {
+        auto pattern_it = pattern.rbegin();
+        // Calculate the first and last for the first character 
+        // Find the statring and ending point of the character in C table 
+        // IMPORTANT NOTE: The first and last calculated here are 1-based index 
+        auto tmp = C_table.find(*pattern_it);
         if (tmp == C_table.end()) {
             return {NOT_FOUND, NOT_FOUND};
         }
@@ -141,11 +130,11 @@ namespace bwtsearch
             // std::cout << bwtsearch::occurance(B_S_array, last, *pattern_it) << std::endl;
 
             // Calculate the occurance of current letter upto the PREVIOUS row of FIRST 
-            auto occ_first = bwtsearch::occurance2(B_S_array, first - 1, *pattern_it, magic_map);
+            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, magic_map);
             // auto occ_first2 = bwtsearch::occurance(B_S_array, first - 1, *pattern_it);
 
             // Calculate the occurance of current letter upto LAST 
-            auto occ_last = bwtsearch::occurance2(B_S_array, last, *pattern_it, magic_map);
+            auto occ_last = bwtsearch::occurance(last, *pattern_it, magic_map);
             // auto occ_last2 = bwtsearch::occurance(B_S_array, last, *pattern_it);
 
             if (occ_first == 0 && occ_last == 0) {

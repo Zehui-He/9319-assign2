@@ -14,7 +14,7 @@ constexpr const std::uint8_t MAX_CHAR = 0b10000000;
 
 int main() {
     //
-    const std::string pattern("e");
+    const std::string pattern("in");
 
     // Open the file 
     const std::string file_name("medium2.rlb");
@@ -83,21 +83,21 @@ int main() {
     }
     
     // Sort the B_S_array by S to get the B_prime_F_array
-    auto B_prime_F_array = B_S_array;
-    std::sort(B_prime_F_array.begin(), B_prime_F_array.end(), utility::paircmp);
+    // auto B_prime_F_array = B_S_array;
+    // std::sort(B_prime_F_array.begin(), B_prime_F_array.end(), utility::paircmp);
 
     // Constuct C table 
     // IMPORTANT NOTE: the C table is 0-based index 
-    auto C_table = std::map<char, unsigned int>{};
-    unsigned int sum = 0;
-    char prev_char = 0;
-    for (size_t i = 0; i < B_prime_F_array.size(); i++) {
-        if (B_prime_F_array[i].second != prev_char) {
-            C_table.insert({B_prime_F_array[i].second, sum});
-            prev_char = B_prime_F_array[i].second;
-        }
-        sum += B_prime_F_array[i].first;
-    }
+    // auto C_table = std::map<char, unsigned int>{};
+    // unsigned int sum = 0;
+    // char prev_char = 0;
+    // for (size_t i = 0; i < B_prime_F_array.size(); i++) {
+    //     if (B_prime_F_array[i].second != prev_char) {
+    //         C_table.insert({B_prime_F_array[i].second, sum});
+    //         prev_char = B_prime_F_array[i].second;
+    //     }
+    //     sum += B_prime_F_array[i].first;
+    // }
 
     // for (auto& i :B_prime_F_array) {
     //     std::cout << static_cast<int>(i.first) << "  " << i.second << std::endl;
@@ -113,7 +113,7 @@ int main() {
     //     }
     // }
 
-    //
+    // Construct the occurance map 
     unsigned int counter = 0;
     std::map<char, std::vector<unsigned int>> magic_map{};
     for (auto& element :B_S_array) {
@@ -128,7 +128,14 @@ int main() {
         }
     }
 
-    auto search_res = bwtsearch::search(B_S_array, magic_map, C_table, pattern, word_count);
+    auto C_table = std::map<char, unsigned int>{};
+    counter = 0;
+    for (auto it = magic_map.begin(); it!= magic_map.end(); it++) {
+        C_table.insert({it->first, counter});
+        counter += it->second.size();
+    }
+
+    auto search_res = bwtsearch::search(magic_map, C_table, pattern, word_count);
     auto first = search_res.first;
     auto last = search_res.second;
 
@@ -164,13 +171,13 @@ int main() {
                 // IMPORTANT NOTE: We record the index of this matching in the B' table NOT in the B table. 
                 if (decode == pattern.back()) {
                     // Find the index in the B' table 
-                    if (!seen_matching_idx.insert(C_table[decode] + bwtsearch::occurance2(B_S_array, current_idx, decode, magic_map)).second) {
+                    if (!seen_matching_idx.insert(C_table[decode] + bwtsearch::occurance(current_idx, decode, magic_map)).second) {
                         break;
                     }
                 }
                 msg += decode;
                 auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance2(B_S_array, current_idx, decode, magic_map);
+                auto occ = bwtsearch::occurance(current_idx, decode, magic_map);
                 current_idx = starting_idx + occ;
             }
             // No need to record if the entry is not decoded completely. 
@@ -193,6 +200,8 @@ int main() {
         }
     }
 
+    return 0;
+
     // Decode all entries
     for (auto& target_entry : entry) {
         auto temp = target_entry + 1; // The decoding should starting from the '[' of NEXT entry. 
@@ -205,7 +214,7 @@ int main() {
                 decode = position_array[current_idx - 1];
                 msg += decode;
                 auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance2(B_S_array, current_idx, decode, magic_map);
+                auto occ = bwtsearch::occurance(current_idx, decode, magic_map);
                 current_idx = starting_idx + occ;
             }
             std::reverse(msg.begin(), msg.end());
@@ -214,14 +223,14 @@ int main() {
             std::string idx_pattern{'['};
             idx_pattern += std::to_string(temp);
             idx_pattern += ']';
-            auto current_idx = bwtsearch::search(B_S_array, magic_map, C_table, idx_pattern, word_count).first;
+            auto current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count).first;
             char decode = 0;
             std::string msg;
             while (decode != '[') {
                 decode = position_array[current_idx - 1];
                 msg += decode;
                 auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance2(B_S_array, current_idx, decode, magic_map);
+                auto occ = bwtsearch::occurance(current_idx, decode, magic_map);
                 current_idx = starting_idx + occ;
             }
             std::reverse(msg.begin(), msg.end());

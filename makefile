@@ -1,5 +1,6 @@
 CC = g++
-CFLAGS = -std=c++14 -Wall -Wextra -g
+CFLAGS = -std=c++14 -Wall -Wextra -O3 -pg
+# CFLAGS = -std=c++14 -Wall -Wextra -g -pg
 EXECUTABLE = bwtsearch
 
 # List of source files
