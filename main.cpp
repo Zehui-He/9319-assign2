@@ -11,13 +11,12 @@
 
 constexpr const std::uint8_t MAX_CHAR = 0b10000000;
 
-
 int main() {
     //
-    const std::string pattern("in");
+    const std::string pattern("db");
 
     // Open the file 
-    const std::string file_name("medium2.rlb");
+    const std::string file_name("large1.rlb");
     std::ifstream file(file_name, std::ios::binary);
 
     std::uint8_t c = 0; // Buffer to read single byte
@@ -81,38 +80,8 @@ int main() {
             count_buff.push_back(c);
         }  
     }
+    file.close();
     
-    // Sort the B_S_array by S to get the B_prime_F_array
-    // auto B_prime_F_array = B_S_array;
-    // std::sort(B_prime_F_array.begin(), B_prime_F_array.end(), utility::paircmp);
-
-    // Constuct C table 
-    // IMPORTANT NOTE: the C table is 0-based index 
-    // auto C_table = std::map<char, unsigned int>{};
-    // unsigned int sum = 0;
-    // char prev_char = 0;
-    // for (size_t i = 0; i < B_prime_F_array.size(); i++) {
-    //     if (B_prime_F_array[i].second != prev_char) {
-    //         C_table.insert({B_prime_F_array[i].second, sum});
-    //         prev_char = B_prime_F_array[i].second;
-    //     }
-    //     sum += B_prime_F_array[i].first;
-    // }
-
-    // for (auto& i :B_prime_F_array) {
-    //     std::cout << static_cast<int>(i.first) << "  " << i.second << std::endl;
-    // }
-
-    // for (auto& i :C_table) {
-    //     std::cout << i.first << "  " << static_cast<int>(i.second) << std::endl;
-    // }
-
-    // for (auto& i :B_S_array) {
-    //     for (unsigned int j = 0; j < i.first; j++) {
-    //         std::cout << i.second << std::endl;
-    //     }
-    // }
-
     // Construct the occurance map 
     unsigned int counter = 0;
     std::map<char, std::vector<unsigned int>> magic_map{};
@@ -148,7 +117,6 @@ int main() {
         }
     }
 
-    std::set<bwtsearch::BwtIndex> seen_idx{}; // Store the seen index 
     std::set<bwtsearch::EntryIndex> entry{}; // Store the result index 
     std::map<bwtsearch::EntryIndex, bwtsearch::BwtIndex> entry_bwt_mapping{}; // Store the mapping of entry and index BWT 
     // For each index between first and last, we decode it until we get '[' 
@@ -200,8 +168,6 @@ int main() {
         }
     }
 
-    return 0;
-
     // Decode all entries
     for (auto& target_entry : entry) {
         auto temp = target_entry + 1; // The decoding should starting from the '[' of NEXT entry. 
@@ -224,6 +190,14 @@ int main() {
             idx_pattern += std::to_string(temp);
             idx_pattern += ']';
             auto current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count).first;
+            // Deal with the final entry
+            if (current_idx == bwtsearch::NOT_FOUND) {
+                temp -= magic_map['['].size();
+                std::string idx_pattern{'['};
+                idx_pattern += std::to_string(temp);
+                idx_pattern += ']';
+                current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count).first;
+            }
             char decode = 0;
             std::string msg;
             while (decode != '[') {

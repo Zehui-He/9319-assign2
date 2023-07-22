@@ -57,23 +57,7 @@ namespace bwtsearch
     }
 
     unsigned int occurance(unsigned int position, char target, std::map<char, std::vector<unsigned int>> const& magic_map) {
-        auto temp = magic_map.find(target)->second;
-        // auto count = 0;
-        // if (position < temp[0]) {
-        //     return 0;
-        // }
-        // else if (position > temp.back()) {
-        //     return temp.size();
-        // }
-
-        // for (unsigned int i = 0; i < temp.size(); i++) {
-        //     if (temp[i] <= position) {
-        //         count++;
-        //         continue;
-        //     }
-        //     break;
-        // }
-        // return count;
+        auto& temp = magic_map.find(target)->second;
         return findLessThanOrEqual(temp, position);
     }
 
@@ -114,9 +98,6 @@ namespace bwtsearch
 
         pattern_it++;
 
-        // std::cout << static_cast<int>(first) << std::endl;
-        // std::cout << static_cast<int>(last) << std::endl;
-
         while (pattern_it != pattern.rend()) {
             // Exit if the current character doesn't in C table 
             if (C_table.find(*pattern_it) == C_table.end()) {
@@ -131,11 +112,14 @@ namespace bwtsearch
 
             // Calculate the occurance of current letter upto the PREVIOUS row of FIRST 
             auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, magic_map);
-            // auto occ_first2 = bwtsearch::occurance(B_S_array, first - 1, *pattern_it);
 
             // Calculate the occurance of current letter upto LAST 
-            auto occ_last = bwtsearch::occurance(last, *pattern_it, magic_map);
-            // auto occ_last2 = bwtsearch::occurance(B_S_array, last, *pattern_it);
+            auto occ_last = 0;
+            if (first == last) {
+                occ_last = occ_first + 1;
+            } else {
+                occ_last = bwtsearch::occurance(last, *pattern_it, magic_map);
+            }
 
             if (occ_first == 0 && occ_last == 0) {
                 return {NOT_FOUND, NOT_FOUND};
