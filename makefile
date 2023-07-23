@@ -1,6 +1,6 @@
 CC = g++
-CFLAGS = -std=c++14 -Wall -Wextra -O3
-# CFLAGS = -std=c++14 -Wall -Wextra -g -pg
+CFLAGS = -std=c++14 -Wall -Wextra -g -static -O3
+#  CFLAGS = -std=c++14 -Wall -Wextra -g
 EXECUTABLE = bwtsearch
 
 # List of source files
@@ -15,7 +15,8 @@ OBJS = $(SRCS:.cpp=.o)
 
 # Rule for linking object files into the executable
 $(EXECUTABLE): $(OBJS)
-	$(CC) $(CFLAGS) $(OBJS) -o $@
+	$(CC) $(CFLAGS) -static $(OBJS) -o $@
+# $(CC) $(CFLAGS) $(OBJS) -o $@
 
 # Rule to clean generated files
 clean:

@@ -1,9 +1,9 @@
 #include "bwtsearch.h"
-#include <cstdint>
 #include <vector>
 #include <algorithm>
 #include <string>
 #include <map>
+#include <memory>
 
 namespace bwtsearch
 {
@@ -27,18 +27,18 @@ namespace bwtsearch
         return num_rows;
     }
 
-    unsigned int findLessThanOrEqual(std::vector<unsigned int> const& sortedArray, unsigned int const& target) {
-        int left = 0;
-        int right = sortedArray.size() - 1;
-        unsigned int resultIndex = sortedArray.size(); // Initialize result index to size of the array
+    unsigned int findLessThanOrEqual(unsigned int* sortedArray, unsigned int const& target, unsigned int const size) {
+        unsigned int left = 0;
+        unsigned right = size - 1;
+        unsigned int resultIndex = size; // Initialize result index to size of the array
 
         // edge cases
         if(sortedArray[0] > target) {
             return 0;
         }
 
-        if (sortedArray.back() < target) {
-            return sortedArray.size();
+        if (sortedArray[size - 1] < target) {
+            return size;
         }
 
         while (left <= right) {
@@ -56,9 +56,28 @@ namespace bwtsearch
         return resultIndex + 1;
     }
 
-    unsigned int occurance(unsigned int position, char target, std::map<char, std::vector<unsigned int>> const& magic_map) {
-        auto& temp = magic_map.find(target)->second;
-        return findLessThanOrEqual(temp, position);
+    unsigned int occurance(unsigned int position, char target, unsigned int ** magic_map, unsigned int* occ_count) {
+        auto& temp = magic_map[(unsigned char)target];
+        return findLessThanOrEqual(temp, position, occ_count[(unsigned char)target]);
+    }
+
+    unsigned int occurance2(IntCharArray const& pair_array, unsigned int position, char target) {
+        unsigned int num_row = 0;
+        unsigned int count = 0;
+        for (auto& row : pair_array) {
+            if (row.second == target) {
+                count += row.first;
+            }
+            num_row += row.first;
+            if (num_row >= position) {
+                if (row.second == target) {
+                    auto tmp = num_row - position;
+                    count -= tmp;
+                }
+                return count;
+            }
+        }
+        return 0;
     }
 
     char at(IntCharArray const& pair_array, unsigned int position) {
@@ -72,53 +91,63 @@ namespace bwtsearch
         return 0;
     }
 
-    std::pair<BwtIndex, BwtIndex> search(std::map<char, std::vector<unsigned int>> const& magic_map, std::map<char, BwtIndex>& C_table, std::string const& pattern, unsigned int const& word_count) {
+    std::pair<BwtIndex, BwtIndex> search(unsigned int ** magic_map, unsigned int* C_table, std::string const& pattern, unsigned int const& word_count, unsigned int* occ_count) {
         auto pattern_it = pattern.rbegin();
         // Calculate the first and last for the first character 
         // Find the statring and ending point of the character in C table 
         // IMPORTANT NOTE: The first and last calculated here are 1-based index 
-        auto tmp = C_table.find(*pattern_it);
-        if (tmp == C_table.end()) {
-            return {NOT_FOUND, NOT_FOUND};
-        }
-        unsigned int first_idx = tmp->second;
+        // auto tmp = C_table.find(*pattern_it);
+        // if (tmp == C_table.end()) {
+        //     return {NOT_FOUND, NOT_FOUND};
+        // }
+        unsigned int first_idx = C_table[static_cast<unsigned int>(*pattern_it)];
 
         unsigned int first = 0;
         first = first_idx + 1;
 
-        tmp++;
+        // tmp++;
         unsigned int last = 0;
-        if (tmp == C_table.end()) {
+        // Find next occuring character in C table
+        unsigned char tmp = 0;
+        for (unsigned int i = static_cast<unsigned int>(*pattern_it) + 1; i < 128; i++) {
+            if (C_table[i] > 0) {
+                tmp = i;
+                break;
+            }
+        }
+
+        if (tmp == 0) {
             last = word_count;
         } else {
             // last_idx = tmp->second;
             // last = bwtsearch::select(B_S_array, last_idx);
-            last = tmp->second - 1 + 1;
+            last = C_table[static_cast<unsigned int>(tmp)] - 1 + 1;
+            // last = tmp->second - 1 + 1;
         }
 
         pattern_it++;
 
         while (pattern_it != pattern.rend()) {
             // Exit if the current character doesn't in C table 
-            if (C_table.find(*pattern_it) == C_table.end()) {
+            if (occ_count[static_cast<unsigned int>(*pattern_it)] == 0) {
                 return {NOT_FOUND, NOT_FOUND};
             }
 
             // C[current character]
-            auto starting_idx = C_table[*pattern_it];
+            auto starting_idx = C_table[static_cast<unsigned int>(*pattern_it)];
 
             // std::cout << bwtsearch::occurance(B_S_array, first - 1, *pattern_it) << std::endl;
             // std::cout << bwtsearch::occurance(B_S_array, last, *pattern_it) << std::endl;
 
             // Calculate the occurance of current letter upto the PREVIOUS row of FIRST 
-            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, magic_map);
+            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, magic_map, occ_count);
 
             // Calculate the occurance of current letter upto LAST 
             auto occ_last = 0;
             if (first == last) {
                 occ_last = occ_first + 1;
             } else {
-                occ_last = bwtsearch::occurance(last, *pattern_it, magic_map);
+                occ_last = bwtsearch::occurance(last, *pattern_it, magic_map, occ_count);
             }
 
             if (occ_first == 0 && occ_last == 0) {

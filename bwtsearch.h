@@ -1,10 +1,8 @@
 #pragma once
-#include <cstdint>
 #include <vector>
-#include <algorithm>
 #include <string>
 #include <map>
-#include <limits>
+#include <memory>
 
 namespace bwtsearch
 {
@@ -14,10 +12,10 @@ namespace bwtsearch
 
     using BwtIndex = unsigned int;
 
-    constexpr const unsigned int NOT_FOUND = std::numeric_limits<unsigned int>::max();
+    constexpr const unsigned int NOT_FOUND = -1;
 
     // Search a given pattern. Return a pair of {first, last}. 
-    std::pair<BwtIndex, BwtIndex> search(std::map<char, std::vector<unsigned int>> const&, std::map<char, BwtIndex>&, std::string const&, unsigned int const&);
+    std::pair<BwtIndex, BwtIndex> search(unsigned int **, unsigned int*, std::string const&, unsigned int const&, unsigned int*);
 
     // Return the number of new characters up to a given position. Returns 1-based index. 
     unsigned int rank(IntCharArray const&, unsigned int);
@@ -26,7 +24,9 @@ namespace bwtsearch
     unsigned int select(IntCharArray const& , unsigned int);
 
     // Find the occurance of a character up to a given position. 
-    unsigned int occurance(unsigned int, char, std::map<char,std::vector<unsigned int>> const&);
+    unsigned int occurance(unsigned int position, char target, unsigned int ** magic_map, unsigned int* occ_count);
+
+    // unsigned int occurance2(IntCharArray const& pair_array, unsigned int position, char target);
 
     // Find the character at given position. 
     char at(IntCharArray const&, unsigned int);

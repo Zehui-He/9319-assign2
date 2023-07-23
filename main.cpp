@@ -1,31 +1,31 @@
 #include "utility.h"
 #include "bwtsearch.h"
 #include <string>
-#include <iostream>
 #include <fstream>
-#include <cstdint>
 #include <vector>
 #include <algorithm>
-#include <map>
 #include <set>
+#include <memory>
 
-constexpr const std::uint8_t MAX_CHAR = 0b10000000;
+constexpr const unsigned char MAX_CHAR = 0b10000000;
 
-int main() {
-    //
-    const std::string pattern("db");
+int main(int argc, char** argv) {
+    auto pattern = argv[3];
+    auto file_name = argv[1];
 
     // Open the file 
-    const std::string file_name("large1.rlb");
     std::ifstream file(file_name, std::ios::binary);
 
-    std::uint8_t c = 0; // Buffer to read single byte
-    std::uint8_t prev = 0; // Buffer to store previous byte 
+    unsigned char c = 0; // Buffer to read single byte
+    unsigned char prev = 0; // Buffer to store previous byte 
     unsigned int count = 0; // Buffer to store count 
-    std::vector<unsigned int> count_buff{};
+    auto count_buff = std::make_unique<std::vector<unsigned int>>();
+    count_buff->reserve(3);
     unsigned int word_count = 0; // The total number of character read 
 
-    bwtsearch::IntCharArray B_S_array; // Store B and S entries in pairs. First element is count, second element is character. 
+    std::vector<unsigned char> position_array; // Store B and S entries in pairs. First element is count, second element is character. 
+    
+    auto occ_count = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));; // Count the occurance of each character 
 
     // Read the bwt file and construct B_array and S_array 
     while (1)
@@ -35,181 +35,164 @@ int main() {
         // Exit loop if EOF is reached 
         // Construct the final count before exiting the loop 
         if (file.eof()) {
-            if (!count_buff.empty()) {
-                for (unsigned int i = 0; i < count_buff.size(); i++) {
-                    utility::unsetMsb(count_buff[i]);
-                    unsigned int shifts = 7 * i;
-                    count_buff[i] = count_buff[i] << shifts;
-                    count += count_buff[i];
+            if (!count_buff->empty()) {
+                    for (unsigned int i = 0; i < count_buff->size(); i++) {
+                        utility::unsetMsb((*count_buff)[i]);
+                        unsigned int shifts = 7 * i;
+                        (*count_buff)[i] = (*count_buff)[i] << shifts;
+                        count += (*count_buff)[i];
+                    }
+                    count += 3; // Starting from 3 
+                    for (unsigned int i = 0; i < count - 1; i++) {
+                        position_array.push_back(position_array.back());
+                    }
+                    word_count += count - 1;
+                    occ_count[static_cast<unsigned int>(prev)] += count - 1;
+                    count = 0;
+                    count_buff->clear();
                 }
-                count += 3; // Starting from 3 
-                B_S_array.back().first = count;
-                word_count += count - 1;
-                count = 0;
-                count_buff.clear();
-            }
             break;
         }
 
         if (c < MAX_CHAR) { // Current byte is a char 
             if (c == prev) {
-                B_S_array.back().first += 1;
+                position_array.push_back(c);
+                occ_count[static_cast<unsigned int>(c)] += 1;
                 word_count += 1;
             } else {
                 // Construct the count if buffer is not empty 
-                if (!count_buff.empty()) {
-                    for (unsigned int i = 0; i < count_buff.size(); i++) {
-                        utility::unsetMsb(count_buff[i]);
+                if (!count_buff->empty()) {
+                    for (unsigned int i = 0; i < count_buff->size(); i++) {
+                        utility::unsetMsb((*count_buff)[i]);
                         unsigned int shifts = 7 * i;
-                        count_buff[i] = count_buff[i] << shifts;
-                        count += count_buff[i];
+                        (*count_buff)[i] = (*count_buff)[i] << shifts;
+                        count += (*count_buff)[i];
                     }
                     count += 3; // Starting from 3 
-                    B_S_array.back().first = count;
+                    for (unsigned int i = 0; i < count - 1; i++) {
+                        position_array.push_back(position_array.back());
+                    }
                     word_count += count - 1;
+                    occ_count[static_cast<unsigned int>(prev)] += count - 1;
                     count = 0;
-                    count_buff.clear();
+                    count_buff->clear();
                 }
 
                 // Insert a new entry 
-                B_S_array.push_back({1, c});
+                position_array.push_back(c);
                 word_count += 1;
+                occ_count[static_cast<unsigned int>(c)] += 1;
                 prev = c;
             }
         } else { // Current byte is a count 
-            count_buff.push_back(c);
+            count_buff->push_back(c);
         }  
     }
     file.close();
-    
+    position_array.shrink_to_fit();
+    count_buff.reset();
+
     // Construct the occurance map 
     unsigned int counter = 0;
-    std::map<char, std::vector<unsigned int>> magic_map{};
-    for (auto& element :B_S_array) {
-        for (unsigned int j = 0; j < element.first; j++) {
-            counter++;
-            if (magic_map.find(element.second) == magic_map.end()) {
-                std::vector<unsigned int> temp_vec{counter};
-                magic_map.insert({element.second, std::move(temp_vec)});
-            } else {
-                magic_map[element.second].push_back(counter);
-            }
+    unsigned int* magic_map[128];
+    for(unsigned int i = 0; i < MAX_CHAR; i++){
+        if (occ_count[i] > 0) {
+            // allocate the array with 0 
+            magic_map[i] = static_cast<unsigned int*>(calloc(occ_count[i], sizeof(unsigned int)));
         }
     }
 
-    auto C_table = std::map<char, unsigned int>{};
-    counter = 0;
-    for (auto it = magic_map.begin(); it!= magic_map.end(); it++) {
-        C_table.insert({it->first, counter});
-        counter += it->second.size();
+    auto occ_fill_count = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));
+
+    for (auto& row : position_array) {
+        counter++;
+        magic_map[static_cast<unsigned int>(row)][occ_fill_count[static_cast<unsigned int>(row)]] = counter;
+        occ_fill_count[static_cast<unsigned int>(row)] += 1;
     }
 
-    auto search_res = bwtsearch::search(magic_map, C_table, pattern, word_count);
+    free(occ_fill_count);
+
+    // print occurance map
+    // for (unsigned int i = 0; i < 128; i++) {
+    //     if (occ_count[i] > 0) {
+    //         printf("%c: ", i);
+    //         for (unsigned int j = 0; j < occ_count[i]; j++) {
+    //             printf("%u ", magic_map[i][j]);
+    //         }
+    //         printf("\n");
+    //     }
+    // }
+
+    // Construct C table 
+    auto C_table = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));
+    counter = 0;
+    for (unsigned int i = 0; i < 128; i++) {
+        if (occ_count[i] > 0) {
+            C_table[i] = counter;
+            counter += occ_count[i];
+        }
+    }
+
+    // print C table
+    // for (unsigned int i = 0; i < 128; i++) {
+    //     if (occ_count[i] > 0) {
+    //         printf("%c: %u\n", i, C_table[i]);
+    //     }
+    // }
+
+    auto search_res = bwtsearch::search(magic_map, C_table, pattern, word_count, occ_count);
     auto first = search_res.first;
     auto last = search_res.second;
 
-    // TODO: should not be in the final version 
-    // This is just for testing  
-    std::vector<char> position_array{};
-    for (auto& e : B_S_array) {
-        for (unsigned int i = 0; i < e.first; i++) {
-            position_array.push_back(e.second);
-        }
-    }
-
     std::set<bwtsearch::EntryIndex> entry{}; // Store the result index 
-    std::map<bwtsearch::EntryIndex, bwtsearch::BwtIndex> entry_bwt_mapping{}; // Store the mapping of entry and index BWT 
     // For each index between first and last, we decode it until we get '[' 
     {
-        std::set<bwtsearch::BwtIndex> seen_matching_idx{}; // Store the index of the last character of the pattern. 
         for (bwtsearch::BwtIndex idx = first; idx <= last; idx++) {
             auto current_idx = idx;
             char decode = 0;
             std::string msg;
-            // Skip this index if it is seen 
-            if (!seen_matching_idx.insert(current_idx).second) {
-                continue;
-            }
             while (decode != '[') {
                 // decode = bwtsearch::at(B_S_array, current_idx);
                 decode = position_array[current_idx - 1];
-                // If the current character is the last target character, we check if it is seen before. 
-                // If it is seen, we don't need to continue because it has been decoded once. 
-                // If it is not seen, we continue to decode. 
-                // IMPORTANT NOTE: We record the index of this matching in the B' table NOT in the B table. 
-                if (decode == pattern.back()) {
-                    // Find the index in the B' table 
-                    if (!seen_matching_idx.insert(C_table[decode] + bwtsearch::occurance(current_idx, decode, magic_map)).second) {
-                        break;
-                    }
-                }
                 msg += decode;
                 auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance(current_idx, decode, magic_map);
+                auto occ = bwtsearch::occurance(current_idx, decode, magic_map, occ_count);
                 current_idx = starting_idx + occ;
-            }
-            // No need to record if the entry is not decoded completely. 
-            if (msg.back() != '[') {
-                continue;
             }
             // Record the entry. 
             std::reverse(msg.begin(), msg.end());
             auto num_str = std::string(msg.begin() += 1, std::find(msg.begin() += 1, msg.end(), ']')); // The string of the entry. 
 
-            // Buffer the found entry.
-            entry_bwt_mapping.insert({std::stoul(num_str), current_idx});
-
-            if (entry.find(std::stoul(num_str)) != entry.end()) {
-                std::cout << "Duplicate!" << std::endl;
-            }
-
             entry.insert(std::stoul(num_str)); 
-            // std::cout << "<" << num_str << ">" << std::endl;
         }
     }
 
     // Decode all entries
     for (auto& target_entry : entry) {
         auto temp = target_entry + 1; // The decoding should starting from the '[' of NEXT entry. 
-        auto entry_idx_pair = entry_bwt_mapping.find(temp);
-        if (entry_idx_pair != entry_bwt_mapping.end()) {
-            auto current_idx = entry_idx_pair->second;
-            char decode = 0;
-            std::string msg;
-            while (decode != '[') {
-                decode = position_array[current_idx - 1];
-                msg += decode;
-                auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance(current_idx, decode, magic_map);
-                current_idx = starting_idx + occ;
-            }
-            std::reverse(msg.begin(), msg.end());
-            std::cout << msg << std::endl;
-        } else {
+        std::string idx_pattern{'['};
+        idx_pattern += std::to_string(temp);
+        idx_pattern += ']';
+        auto current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count, occ_count).first;
+        // Deal with the final entry
+        if (current_idx == bwtsearch::NOT_FOUND) {
+            temp -= occ_count[static_cast<unsigned int>('[')];
             std::string idx_pattern{'['};
             idx_pattern += std::to_string(temp);
             idx_pattern += ']';
-            auto current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count).first;
-            // Deal with the final entry
-            if (current_idx == bwtsearch::NOT_FOUND) {
-                temp -= magic_map['['].size();
-                std::string idx_pattern{'['};
-                idx_pattern += std::to_string(temp);
-                idx_pattern += ']';
-                current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count).first;
-            }
-            char decode = 0;
-            std::string msg;
-            while (decode != '[') {
-                decode = position_array[current_idx - 1];
-                msg += decode;
-                auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance(current_idx, decode, magic_map);
-                current_idx = starting_idx + occ;
-            }
-            std::reverse(msg.begin(), msg.end());
-            std::cout << msg << std::endl;
+            current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count, occ_count).first;
         }
+        char decode = 0;
+        std::string msg;
+        while (decode != '[') {
+            decode = position_array[current_idx - 1];
+            msg += decode;
+            auto starting_idx = C_table[decode];
+            auto occ = bwtsearch::occurance(current_idx, decode, magic_map, occ_count);
+            current_idx = starting_idx + occ;
+        }
+        std::reverse(msg.begin(), msg.end());
+        printf("%s\n", msg.c_str());
         
     }
 
