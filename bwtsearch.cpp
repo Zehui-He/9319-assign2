@@ -1,4 +1,5 @@
 #include "bwtsearch.h"
+#include "utility.h"
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -7,147 +8,174 @@
 
 namespace bwtsearch
 {
-    unsigned int rank(IntCharArray const& pair_array, unsigned int position) {
-        unsigned int num_rows = 0;
-        for (unsigned int i = 0; i < pair_array.size(); i++) {
-            num_rows += pair_array[i].first;
-            if (position <= num_rows) {
-                return i + 1; // Returning 1-based index 
-            }
+    unsigned int occurance(unsigned int position, char target, std::ifstream& index_read, std::ifstream& file, unsigned int chunk_size) {
+        // Reset the file pointer
+        index_read.clear();
+        file.clear();
+        // Shift the file pointer to the starting point of an entry 
+        unsigned int entry_index = position / chunk_size - 1;
+        unsigned int entry_offset = 0;
+        if (entry_index != static_cast<unsigned int>(-1)) {
+            entry_offset = 130 * entry_index * sizeof(unsigned int); // 130 is size of entry 
         }
-        return 0;
-    }
+        index_read.seekg(entry_offset, std::ios::beg);
 
-    unsigned int select(IntCharArray const& pair_array, unsigned int N) {
-        unsigned int num_rows = 0;
-        for (unsigned int i = 0; i < N - 1; i++) {
-            num_rows += pair_array[i].first;
+        unsigned int rlb_pos = 0;
+        unsigned int char_offset = 0;
+        unsigned int target_occurance = 0;
+        if (entry_index == static_cast<unsigned int>(-1)) {
+            char_offset = 0;
+            target_occurance = 0; // why????
+        } else {
+            // Read the RLB position 
+            index_read.read(reinterpret_cast<char*>(&rlb_pos), sizeof(unsigned int));
+            // Read the character off set 
+            index_read.read(reinterpret_cast<char*>(&char_offset), sizeof(unsigned int));
+            // Read the occurance table 
+            // Can be optimized by reading only the target character 
+            // Shift the file pointer to the target character 
+            index_read.seekg(static_cast<unsigned int>(target) * sizeof(unsigned int), std::ios::cur);
+            index_read.read(reinterpret_cast<char*>(&target_occurance), sizeof(unsigned int));
+            // unsigned int occ_table[128] = { 0 };
+            // for (unsigned int i = 0; i < 128; i++) {
+            //     index_read.read(reinterpret_cast<char*>(&occ_table[i]), sizeof(unsigned int));
+            // }
+            // target_occurance = occ_table[static_cast<unsigned int>(target)];
         }
-        num_rows++;
-        return num_rows;
-    }
 
-    unsigned int findLessThanOrEqual(unsigned int* sortedArray, unsigned int const& target, unsigned int const size) {
-        unsigned int left = 0;
-        unsigned right = size - 1;
-        unsigned int resultIndex = size; // Initialize result index to size of the array
+        // Set up the current position 
+        unsigned int curr_postion = (entry_index + 1) * chunk_size;
 
-        // edge cases
-        if(sortedArray[0] > target) {
-            return 0;
-        }
-
-        if (sortedArray[size - 1] < target) {
-            return size;
-        }
-
-        while (left <= right) {
-            int mid = left + (right - left) / 2;
-
-            if (sortedArray[mid] <= target) {
-                resultIndex = mid; // Update result index and continue searching right for a larger number
-                left = mid + 1;
+        // Deal with the first RLB entry 
+        file.seekg(rlb_pos, std::ios::beg);
+        auto current_entry = utility::readRlbEntry(file);
+        // The target position is within the range of the first RLB entry 
+        if (curr_postion + current_entry.count - char_offset >= position) {
+            if (current_entry.character == target) {
+                return target_occurance + position - curr_postion;
             } else {
-                // If the element at mid is greater than the target, continue searching left
-                right = mid - 1;
+                return target_occurance;
             }
+        } else { // The target position is not within the range of the first RLB entry
+            if (current_entry.character == target) {
+                target_occurance += current_entry.count - char_offset;
+            }
+            curr_postion += current_entry.count - char_offset;
         }
 
-        return resultIndex + 1;
-    }
-
-    unsigned int occurance(unsigned int position, char target, unsigned int ** magic_map, unsigned int* occ_count) {
-        auto& temp = magic_map[(unsigned char)target];
-        return findLessThanOrEqual(temp, position, occ_count[(unsigned char)target]);
-    }
-
-    unsigned int occurance2(IntCharArray const& pair_array, unsigned int position, char target) {
-        unsigned int num_row = 0;
-        unsigned int count = 0;
-        for (auto& row : pair_array) {
-            if (row.second == target) {
-                count += row.first;
-            }
-            num_row += row.first;
-            if (num_row >= position) {
-                if (row.second == target) {
-                    auto tmp = num_row - position;
-                    count -= tmp;
+        // Read unitl the target position 
+        while (curr_postion != position) {
+            current_entry = utility::readRlbEntry(file);
+            if (curr_postion + current_entry.count >= position) {
+                if (current_entry.character == target) {
+                    target_occurance += position - curr_postion;
                 }
-                return count;
+                break;
+            } else {
+                if (current_entry.character == target) {
+                    target_occurance += current_entry.count;
+                }
             }
+            curr_postion += current_entry.count;
         }
-        return 0;
+        
+        return target_occurance;
     }
 
-    char at(IntCharArray const& pair_array, unsigned int position) {
-        unsigned int num_row = 0;
-        for (auto& row : pair_array) {
-            num_row += row.first;
-            if (num_row >= position) {
-                return row.second;
-            }
+    char at(unsigned int position, std::ifstream& index_read, std::ifstream& file, unsigned int chunk_size) {
+        // Reset the file pointer
+        index_read.clear();
+        file.clear();
+        // Shift the file pointer to the starting point of an entry 
+        unsigned int entry_index = position / chunk_size - 1;
+        unsigned int entry_offset = 0;
+        if (entry_index != static_cast<unsigned int>(-1)) {
+            entry_offset = 130 * entry_index * sizeof(unsigned int); // 130 is size of entry 
         }
-        return 0;
+        index_read.seekg(entry_offset, std::ios::beg);
+
+        unsigned int rlb_pos = 0;
+        unsigned int char_offset = 0;
+        if (entry_index == static_cast<unsigned int>(-1)) {
+            char_offset = 0; // Why????
+        } else {
+            // Read the RLB position 
+            index_read.read(reinterpret_cast<char*>(&rlb_pos), sizeof(unsigned int));
+            // Read the character off set 
+            index_read.read(reinterpret_cast<char*>(&char_offset), sizeof(unsigned int));
+        }
+
+        // Set up the current position 
+        unsigned int curr_postion = (entry_index + 1) * chunk_size;
+
+        // Deal with the first RLB entry 
+        file.seekg(rlb_pos, std::ios::beg);
+        auto current_entry = utility::readRlbEntry(file);
+        // The target position is within the range of the first RLB entry 
+        if (curr_postion + current_entry.count - char_offset >= position) {
+            return current_entry.character;
+        } else { // The target position is not within the range of the first RLB entry
+            curr_postion += current_entry.count - char_offset;
+        }
+
+        // Read unitl the target position 
+        while (curr_postion != position) {
+            current_entry = utility::readRlbEntry(file);
+            if (curr_postion + current_entry.count >= position) {
+                return current_entry.character;
+            }
+            curr_postion += current_entry.count;
+        }
+        
+        return static_cast<char>(-1);
     }
 
-    std::pair<BwtIndex, BwtIndex> search(unsigned int ** magic_map, unsigned int* C_table, std::string const& pattern, unsigned int const& word_count, unsigned int* occ_count) {
+    std::pair<BwtIndex, BwtIndex> search(CTable* C_table, std::string const& pattern, std::ifstream& file, std::ifstream& index_read, unsigned int chunk_size) {
+        // Reset the file pointer
+        index_read.clear();
+        file.clear();
+        
         auto pattern_it = pattern.rbegin();
         // Calculate the first and last for the first character 
         // Find the statring and ending point of the character in C table 
         // IMPORTANT NOTE: The first and last calculated here are 1-based index 
-        // auto tmp = C_table.find(*pattern_it);
-        // if (tmp == C_table.end()) {
-        //     return {NOT_FOUND, NOT_FOUND};
-        // }
-        unsigned int first_idx = C_table[static_cast<unsigned int>(*pattern_it)];
+        unsigned int first_idx = C_table->getIndex(*pattern_it);
 
         unsigned int first = 0;
-        first = first_idx + 1;
+        first = (*C_table)[first_idx].begin + 1;
 
-        // tmp++;
         unsigned int last = 0;
         // Find next occuring character in C table
-        unsigned char tmp = 0;
-        for (unsigned int i = static_cast<unsigned int>(*pattern_it) + 1; i < 128; i++) {
-            if (C_table[i] > 0) {
-                tmp = i;
-                break;
-            }
-        }
-
-        if (tmp == 0) {
-            last = word_count;
+        if (first_idx + 1 == C_table->C_table_size) {
+            last = C_table->total_char;
         } else {
-            // last_idx = tmp->second;
-            // last = bwtsearch::select(B_S_array, last_idx);
-            last = C_table[static_cast<unsigned int>(tmp)] - 1 + 1;
-            // last = tmp->second - 1 + 1;
+            last = (*C_table)[first_idx + 1].begin;
         }
 
         pattern_it++;
 
         while (pattern_it != pattern.rend()) {
             // Exit if the current character doesn't in C table 
-            if (occ_count[static_cast<unsigned int>(*pattern_it)] == 0) {
+            if (C_table->getIndex(*pattern_it) == CTable::NOT_FOUND) {
                 return {NOT_FOUND, NOT_FOUND};
             }
 
             // C[current character]
-            auto starting_idx = C_table[static_cast<unsigned int>(*pattern_it)];
+            // auto starting_idx = C_table[static_cast<unsigned int>(*pattern_it)];
+            auto starting_idx = (*C_table)[C_table->getIndex(*pattern_it)].begin;
 
             // std::cout << bwtsearch::occurance(B_S_array, first - 1, *pattern_it) << std::endl;
             // std::cout << bwtsearch::occurance(B_S_array, last, *pattern_it) << std::endl;
 
             // Calculate the occurance of current letter upto the PREVIOUS row of FIRST 
-            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, magic_map, occ_count);
+            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, index_read, file, chunk_size);
 
             // Calculate the occurance of current letter upto LAST 
             auto occ_last = 0;
             if (first == last) {
                 occ_last = occ_first + 1;
             } else {
-                occ_last = bwtsearch::occurance(last, *pattern_it, magic_map, occ_count);
+                occ_last = bwtsearch::occurance(last, *pattern_it, index_read, file, chunk_size);
             }
 
             if (occ_first == 0 && occ_last == 0) {

@@ -8,139 +8,175 @@
 #include <memory>
 
 constexpr const unsigned char MAX_CHAR = 0b10000000;
+// The first uint is the block size 
+// The rest uint are the occurance table 
+constexpr const int OVER_HEAD = -129; 
+constexpr const unsigned int ENTRY_SIZE = 1 + 1 + 128; // The size of each entry in index file
+
+class Counter {
+public:
+    Counter(unsigned int chunk_size) : CHUNK_SIZE(chunk_size) {
+        count = 0;
+        occ_count = std::vector<unsigned int>(128, 0);
+    }
+    
+    unsigned int count;
+    std::vector<unsigned int> occ_count;
+    unsigned int CHUNK_SIZE;
+    
+
+    unsigned int& operator[](unsigned int idx) {
+        return occ_count[idx];
+    }
+
+    // Count the occurance of a character 'c' by 'n' times 
+    // If the count reaches the chunk size, write an entry to the index file 
+    // The entry consists of the position of the current CHARACTER, the offset of current CHARACTER and the occurance table 
+    void count_char(unsigned char c, unsigned int n, std::streampos char_pos, std::ofstream & index) {
+        for (unsigned int i = 0; i < n; i++) {
+            occ_count[static_cast<unsigned int>(c)] += 1;
+            count += 1;
+            if (count % CHUNK_SIZE == 0 && count != 0) {
+                // print file position
+                auto file_pos = static_cast<unsigned int>(char_pos);
+                // output position to the index file 
+                index.write(reinterpret_cast<char*>(&file_pos), sizeof(file_pos));
+                // output offset to the index file
+                auto temp = i + 1; // Note: 1-based index 
+                index.write(reinterpret_cast<char*>(&temp), sizeof(i));
+                for (unsigned char i = 0; i < occ_count.size(); i++) {
+                    index.write(reinterpret_cast<char*>(&occ_count[i]), sizeof(unsigned int));
+                }
+            }
+        }
+    }
+
+};
 
 int main(int argc, char** argv) {
     auto pattern = argv[3];
     auto file_name = argv[1];
 
-    // Open the file 
+    const auto index_file = std::string("index.idx");
+
+    // Open the input file 
     std::ifstream file(file_name, std::ios::binary);
 
-    unsigned char c = 0; // Buffer to read single byte
-    unsigned char prev = 0; // Buffer to store previous byte 
-    unsigned int count = 0; // Buffer to store count 
-    auto count_buff = std::make_unique<std::vector<unsigned int>>();
-    count_buff->reserve(3);
-    unsigned int word_count = 0; // The total number of character read 
+    // If the index file exists, read the index file. 
+    // Otherwise, construct the index file. 
+    if (!utility::fileExists(index_file)) {
+        std::ofstream index(index_file, std::ios::binary);
+        // Get the total size of the file
+        file.seekg(0, std::ios::end);
+        const unsigned int file_size = static_cast<unsigned int>(file.tellg());
+        printf("File size: %u\n", file_size);
 
-    std::vector<unsigned char> position_array; // Store B and S entries in pairs. First element is count, second element is character. 
-    
-    auto occ_count = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));; // Count the occurance of each character 
+        // Calculate the chunk size 
+        // int chunk_num = (file_size / 4 - 129) / 130;
+        // unsigned int chunk_size = file_size / chunk_num;
+        unsigned int chunk_size = 1000;
 
-    // Read the bwt file and construct B_array and S_array 
-    while (1)
-    {
-        file.read(reinterpret_cast<char*>(&c), sizeof(c));
+        // Reset the file pointer
+        file.seekg(0, std::ios::beg);
 
-        // Exit loop if EOF is reached 
-        // Construct the final count before exiting the loop 
-        if (file.eof()) {
-            if (!count_buff->empty()) {
-                    for (unsigned int i = 0; i < count_buff->size(); i++) {
-                        utility::unsetMsb((*count_buff)[i]);
-                        unsigned int shifts = 7 * i;
-                        (*count_buff)[i] = (*count_buff)[i] << shifts;
-                        count += (*count_buff)[i];
-                    }
-                    count += 3; // Starting from 3 
-                    for (unsigned int i = 0; i < count - 1; i++) {
-                        position_array.push_back(position_array.back());
-                    }
-                    word_count += count - 1;
-                    occ_count[static_cast<unsigned int>(prev)] += count - 1;
-                    count = 0;
-                    count_buff->clear();
-                }
-            break;
-        }
+        unsigned char char_buff = 0; // Buffer to read single byte 
+        unsigned char prev_char_buff = 0; // Buffer to store previous character 
+        std::streampos prev_char_pos = 0; // Buffer to store the position of previous character 
+        unsigned int count_assemble = 0; // Buffer to asseble the multi-byte count 
+        auto count_buff = std::make_unique<std::vector<unsigned int>>(); // Buffer to store the multi-byte count 
+        count_buff->reserve(3);
 
-        if (c < MAX_CHAR) { // Current byte is a char 
-            if (c == prev) {
-                position_array.push_back(c);
-                occ_count[static_cast<unsigned int>(c)] += 1;
-                word_count += 1;
-            } else {
-                // Construct the count if buffer is not empty 
-                if (!count_buff->empty()) {
-                    for (unsigned int i = 0; i < count_buff->size(); i++) {
-                        utility::unsetMsb((*count_buff)[i]);
-                        unsigned int shifts = 7 * i;
-                        (*count_buff)[i] = (*count_buff)[i] << shifts;
-                        count += (*count_buff)[i];
-                    }
-                    count += 3; // Starting from 3 
-                    for (unsigned int i = 0; i < count - 1; i++) {
-                        position_array.push_back(position_array.back());
-                    }
-                    word_count += count - 1;
-                    occ_count[static_cast<unsigned int>(prev)] += count - 1;
-                    count = 0;
-                    count_buff->clear();
-                }
-
-                // Insert a new entry 
-                position_array.push_back(c);
-                word_count += 1;
-                occ_count[static_cast<unsigned int>(c)] += 1;
-                prev = c;
+        auto counter = std::make_unique<Counter>(chunk_size);
+        
+        // Read the rlb file 
+        while (file.get(reinterpret_cast<char&>(char_buff)))
+        {
+            // Exit if reaches the end of file
+            if (file.eof()) {
+                break;
             }
-        } else { // Current byte is a count 
-            count_buff->push_back(c);
-        }  
-    }
-    file.close();
-    position_array.shrink_to_fit();
-    count_buff.reset();
 
-    // Construct the occurance map 
-    unsigned int counter = 0;
-    unsigned int* magic_map[128];
-    for(unsigned int i = 0; i < MAX_CHAR; i++){
-        if (occ_count[i] > 0) {
-            // allocate the array with 0 
-            magic_map[i] = static_cast<unsigned int*>(calloc(occ_count[i], sizeof(unsigned int)));
+            prev_char_buff = char_buff;
+            prev_char_pos = file.tellg();
+            prev_char_pos -= 1;
+            // Read until next character 
+            while (static_cast<unsigned char>(file.peek()) >= MAX_CHAR) {
+                if (file.eof()) {
+                    break;
+                }
+                file.get(reinterpret_cast<char&>(char_buff));
+                count_buff->push_back(char_buff);
+            }
+
+            if (count_buff->size() > 0) {
+                // Assemble the count 
+                for (unsigned int i = 0; i < count_buff->size(); i++) {
+                    // Unset most significant bit
+                    utility::unsetMsb((*count_buff)[i]);
+                    count_assemble += (*count_buff)[i] << (7 * i);
+                }
+                count_assemble += 3; // Count statring from 3 
+                counter->count_char(prev_char_buff, count_assemble, prev_char_pos, index);
+                // printf("Read a character:%c, count:%u \n", prev_char_buff, count_assemble);
+                count_assemble = 0;
+                // Reset the count buffer 
+                count_buff->clear();
+            } else {
+                counter->count_char(prev_char_buff, 1, prev_char_pos, index);
+                // printf("Read a character:%c \n", prev_char_buff);
+            }
         }
+
+        // Write the chunk size into index file
+        index.write(reinterpret_cast<char*>(&counter->CHUNK_SIZE), sizeof(unsigned int));
+
+        // Write the final occurance table into index file 
+        for (unsigned char i = 0; i < 128; i++) {
+            index.write(reinterpret_cast<char*>(&counter->occ_count[i]), sizeof(unsigned int));
+        }
+
+        index.close();
     }
 
-    auto occ_fill_count = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));
+    // Open the index file
+    std::ifstream index_read(index_file, std::ios::binary);
 
-    for (auto& row : position_array) {
-        counter++;
-        magic_map[static_cast<unsigned int>(row)][occ_fill_count[static_cast<unsigned int>(row)]] = counter;
-        occ_fill_count[static_cast<unsigned int>(row)] += 1;
+    // Shift the file pointer to the starting point of over head 
+    index_read.seekg(OVER_HEAD * sizeof(unsigned int), std::ios::end);
+
+    // Read the chunk size from index file 
+    unsigned int chunk_size = 0;
+    index_read.read(reinterpret_cast<char*>(&chunk_size), sizeof(unsigned int));
+    printf("Block size: %u\n", chunk_size);
+
+    // Read the final occurance table from index file 
+    auto final_occ_table = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));
+    for (unsigned char i = 0; i < 128; i++) {
+        index_read.read(reinterpret_cast<char*>(&final_occ_table[i]), sizeof(unsigned int));
+        // printf("%c: %u\n", i, final_occ_table[i]);
     }
-
-    free(occ_fill_count);
-
-    // print occurance map
-    // for (unsigned int i = 0; i < 128; i++) {
-    //     if (occ_count[i] > 0) {
-    //         printf("%c: ", i);
-    //         for (unsigned int j = 0; j < occ_count[i]; j++) {
-    //             printf("%u ", magic_map[i][j]);
-    //         }
-    //         printf("\n");
-    //     }
-    // }
 
     // Construct C table 
-    auto C_table = static_cast<unsigned int*>(calloc(128, sizeof(unsigned int)));
-    counter = 0;
-    for (unsigned int i = 0; i < 128; i++) {
-        if (occ_count[i] > 0) {
-            C_table[i] = counter;
-            counter += occ_count[i];
-        }
-    }
+    CTable* C_table = new CTable(final_occ_table);
 
     // print C table
-    // for (unsigned int i = 0; i < 128; i++) {
-    //     if (occ_count[i] > 0) {
-    //         printf("%c: %u\n", i, C_table[i]);
-    //     }
-    // }
+    // C_table->print();
 
-    auto search_res = bwtsearch::search(magic_map, C_table, pattern, word_count, occ_count);
+    // Test occurance function 
+    // auto occ = bwtsearch::occurance(1, '[', index_read, file, chunk_size);
+    // printf("Occurance: %u\n", occ);
+
+    // Test at function
+    // auto output = std::ofstream("output.txt");
+    // for (unsigned int i = 1; i <= 55; i++) {
+    //     auto c = bwtsearch::at(i, index_read, file, chunk_size);
+    //     output.write(reinterpret_cast<char*>(&c), sizeof(char));
+    //     printf("%c", c);
+    // }
+    // printf("\n");
+    // printf("%c\n", bwtsearch::at(9, index_read, file, chunk_size));
+
+    auto search_res = bwtsearch::search(C_table, pattern, file, index_read, chunk_size);
     auto first = search_res.first;
     auto last = search_res.second;
 
@@ -152,15 +188,15 @@ int main(int argc, char** argv) {
             char decode = 0;
             std::string msg;
             while (decode != '[') {
-                // decode = bwtsearch::at(B_S_array, current_idx);
-                decode = position_array[current_idx - 1];
+                decode = bwtsearch::at(current_idx, index_read, file, chunk_size);
                 msg += decode;
-                auto starting_idx = C_table[decode];
-                auto occ = bwtsearch::occurance(current_idx, decode, magic_map, occ_count);
+                auto starting_idx = (*C_table)[C_table->getIndex(decode)].begin;
+                auto occ = bwtsearch::occurance(current_idx, decode, index_read, file, chunk_size);
                 current_idx = starting_idx + occ;
             }
             // Record the entry. 
             std::reverse(msg.begin(), msg.end());
+            // printf("Matching string: %s\n", msg.c_str());
             auto num_str = std::string(msg.begin() += 1, std::find(msg.begin() += 1, msg.end(), ']')); // The string of the entry. 
 
             entry.insert(std::stoul(num_str)); 
@@ -173,27 +209,27 @@ int main(int argc, char** argv) {
         std::string idx_pattern{'['};
         idx_pattern += std::to_string(temp);
         idx_pattern += ']';
-        auto current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count, occ_count).first;
+        auto current_idx = bwtsearch::search(C_table, idx_pattern, file, index_read, chunk_size).first;
         // Deal with the final entry
         if (current_idx == bwtsearch::NOT_FOUND) {
-            temp -= occ_count[static_cast<unsigned int>('[')];
+            temp -= final_occ_table[static_cast<unsigned int>('[')];
             std::string idx_pattern{'['};
             idx_pattern += std::to_string(temp);
             idx_pattern += ']';
-            current_idx = bwtsearch::search(magic_map, C_table, idx_pattern, word_count, occ_count).first;
+            current_idx = bwtsearch::search(C_table, idx_pattern, file, index_read, chunk_size).first;
         }
         char decode = 0;
         std::string msg;
         while (decode != '[') {
-            decode = position_array[current_idx - 1];
+            decode = bwtsearch::at(current_idx, index_read, file, chunk_size);
             msg += decode;
-            auto starting_idx = C_table[decode];
-            auto occ = bwtsearch::occurance(current_idx, decode, magic_map, occ_count);
+            auto starting_idx = (*C_table)[C_table->getIndex(decode)].begin;
+            auto occ = bwtsearch::occurance(current_idx, decode, index_read, file, chunk_size);
             current_idx = starting_idx + occ;
         }
         std::reverse(msg.begin(), msg.end());
         printf("%s\n", msg.c_str());
-        
+
     }
 
     return 0;

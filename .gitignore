@@ -7,3 +7,5 @@ bwtsearch
 *.rlb
 *.bwt
 *.out
+*.idx
+test.sh
