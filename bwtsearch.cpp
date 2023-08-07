@@ -8,67 +8,23 @@
 
 namespace bwtsearch
 {
-    unsigned int occurance(unsigned int position, char target, std::ifstream& index_read, std::ifstream& file, unsigned int chunk_size) {
-        // Reset the file pointer
-        index_read.clear();
-        file.clear();
-        // Shift the file pointer to the starting point of an entry 
-        unsigned int entry_index = position / chunk_size - 1;
-        unsigned int entry_offset = 0;
-        if (entry_index != static_cast<unsigned int>(-1)) {
-            entry_offset = 130 * entry_index * sizeof(unsigned int); // 130 is size of entry 
-        }
-        index_read.seekg(entry_offset, std::ios::beg);
+    unsigned int occurance(unsigned int position, char target, FileBuffer& file_buffer) {
+        // Read the block accordingly 
+        file_buffer.read_block(position);
 
-        unsigned int rlb_pos = 0;
-        unsigned int char_offset = 0;
-        unsigned int target_occurance = 0;
-        if (entry_index == static_cast<unsigned int>(-1)) {
-            char_offset = 0;
-            target_occurance = 0; // why????
-        } else {
-            // Read the RLB position 
-            index_read.read(reinterpret_cast<char*>(&rlb_pos), sizeof(unsigned int));
-            // Read the character off set 
-            index_read.read(reinterpret_cast<char*>(&char_offset), sizeof(unsigned int));
-            // Read the occurance table 
-            // Can be optimized by reading only the target character 
-            // Shift the file pointer to the target character 
-            index_read.seekg(static_cast<unsigned int>(target) * sizeof(unsigned int), std::ios::cur);
-            index_read.read(reinterpret_cast<char*>(&target_occurance), sizeof(unsigned int));
-            // unsigned int occ_table[128] = { 0 };
-            // for (unsigned int i = 0; i < 128; i++) {
-            //     index_read.read(reinterpret_cast<char*>(&occ_table[i]), sizeof(unsigned int));
-            // }
-            // target_occurance = occ_table[static_cast<unsigned int>(target)];
-        }
+        unsigned int buffer_pos = 0; // Record the position of the buffer 
 
         // Set up the current position 
-        unsigned int curr_postion = (entry_index + 1) * chunk_size;
+        unsigned int curr_position = file_buffer.count_starting_point;
 
-        // Deal with the first RLB entry 
-        file.seekg(rlb_pos, std::ios::beg);
-        auto current_entry = utility::readRlbEntry(file);
-        // The target position is within the range of the first RLB entry 
-        if (curr_postion + current_entry.count - char_offset >= position) {
-            if (current_entry.character == target) {
-                return target_occurance + position - curr_postion;
-            } else {
-                return target_occurance;
-            }
-        } else { // The target position is not within the range of the first RLB entry
-            if (current_entry.character == target) {
-                target_occurance += current_entry.count - char_offset;
-            }
-            curr_postion += current_entry.count - char_offset;
-        }
-
+        unsigned int target_occurance = file_buffer.occ_table[static_cast<unsigned int>(target)];
+        
         // Read unitl the target position 
-        while (curr_postion != position) {
-            current_entry = utility::readRlbEntry(file);
-            if (curr_postion + current_entry.count >= position) {
+        while (curr_position != position) {
+            auto current_entry = utility::readRlbEntry(file_buffer, buffer_pos);
+            if (curr_position + current_entry.count >= position) {
                 if (current_entry.character == target) {
-                    target_occurance += position - curr_postion;
+                    target_occurance += position - curr_position;
                 }
                 break;
             } else {
@@ -76,65 +32,36 @@ namespace bwtsearch
                     target_occurance += current_entry.count;
                 }
             }
-            curr_postion += current_entry.count;
+            curr_position += current_entry.count;
         }
         
         return target_occurance;
     }
 
-    char at(unsigned int position, std::ifstream& index_read, std::ifstream& file, unsigned int chunk_size) {
-        // Reset the file pointer
-        index_read.clear();
-        file.clear();
-        // Shift the file pointer to the starting point of an entry 
-        unsigned int entry_index = position / chunk_size - 1;
-        unsigned int entry_offset = 0;
-        if (entry_index != static_cast<unsigned int>(-1)) {
-            entry_offset = 130 * entry_index * sizeof(unsigned int); // 130 is size of entry 
-        }
-        index_read.seekg(entry_offset, std::ios::beg);
+    char at(unsigned int position, FileBuffer& file_buffer) {
+        // Read the block accordingly 
+        file_buffer.read_block(position);
 
-        unsigned int rlb_pos = 0;
-        unsigned int char_offset = 0;
-        if (entry_index == static_cast<unsigned int>(-1)) {
-            char_offset = 0; // Why????
-        } else {
-            // Read the RLB position 
-            index_read.read(reinterpret_cast<char*>(&rlb_pos), sizeof(unsigned int));
-            // Read the character off set 
-            index_read.read(reinterpret_cast<char*>(&char_offset), sizeof(unsigned int));
-        }
+        unsigned int buffer_pos = 0; // Record the position of the buffer 
 
         // Set up the current position 
-        unsigned int curr_postion = (entry_index + 1) * chunk_size;
+        unsigned int curr_position = file_buffer.count_starting_point;
 
-        // Deal with the first RLB entry 
-        file.seekg(rlb_pos, std::ios::beg);
-        auto current_entry = utility::readRlbEntry(file);
-        // The target position is within the range of the first RLB entry 
-        if (curr_postion + current_entry.count - char_offset >= position) {
-            return current_entry.character;
-        } else { // The target position is not within the range of the first RLB entry
-            curr_postion += current_entry.count - char_offset;
-        }
+        // auto current_entry = utility::readRlbEntry(file_buffer, buffer_pos);
 
         // Read unitl the target position 
-        while (curr_postion != position) {
-            current_entry = utility::readRlbEntry(file);
-            if (curr_postion + current_entry.count >= position) {
+        while (curr_position != position) {
+            auto current_entry = utility::readRlbEntry(file_buffer, buffer_pos);
+            if (curr_position + current_entry.count >= position) {
                 return current_entry.character;
             }
-            curr_postion += current_entry.count;
+            curr_position += current_entry.count;
         }
         
         return static_cast<char>(-1);
     }
 
-    std::pair<BwtIndex, BwtIndex> search(CTable* C_table, std::string const& pattern, std::ifstream& file, std::ifstream& index_read, unsigned int chunk_size) {
-        // Reset the file pointer
-        index_read.clear();
-        file.clear();
-        
+    std::pair<BwtIndex, BwtIndex> search(CTable* C_table, std::string const& pattern, FileBuffer& file_buffer) {
         auto pattern_it = pattern.rbegin();
         // Calculate the first and last for the first character 
         // Find the statring and ending point of the character in C table 
@@ -168,14 +95,14 @@ namespace bwtsearch
             // std::cout << bwtsearch::occurance(B_S_array, last, *pattern_it) << std::endl;
 
             // Calculate the occurance of current letter upto the PREVIOUS row of FIRST 
-            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, index_read, file, chunk_size);
+            auto occ_first = bwtsearch::occurance(first - 1, *pattern_it, file_buffer);
 
             // Calculate the occurance of current letter upto LAST 
             auto occ_last = 0;
             if (first == last) {
                 occ_last = occ_first + 1;
             } else {
-                occ_last = bwtsearch::occurance(last, *pattern_it, index_read, file, chunk_size);
+                occ_last = bwtsearch::occurance(last, *pattern_it, file_buffer);
             }
 
             if (occ_first == 0 && occ_last == 0) {

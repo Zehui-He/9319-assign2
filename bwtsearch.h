@@ -17,11 +17,11 @@ namespace bwtsearch
     constexpr const unsigned int NOT_FOUND = -1;
 
     // Search a given pattern. Return a pair of {first, last}. 
-    std::pair<BwtIndex, BwtIndex> search(CTable* C_table, std::string const& pattern, std::ifstream& file, std::ifstream& index_read, unsigned int chunk_size);
+    std::pair<BwtIndex, BwtIndex> search(CTable* C_table, std::string const& pattern, FileBuffer& file_buffer);
 
     // Find the occurance of a character up to a given position. 
-    unsigned int occurance(unsigned int position, char target, std::ifstream& index_read, std::ifstream& file, unsigned int chunk_size);
+    unsigned int occurance(unsigned int position, char target, FileBuffer& file_buffer);
 
     // Find the character at given position in the RLB file. 
-    char at(unsigned int position, std::ifstream& index_read, std::ifstream& file, unsigned int chunk_size);
+    char at(unsigned int position, FileBuffer& file_buffer);
 }
